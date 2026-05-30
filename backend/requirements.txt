@@ -1,6 +1,8 @@
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
-sqlalchemy
+sqlalchemy[asyncio]
 pydantic
-redis
+asyncpg
+httpx
+aiosqlite
