@@ -7,8 +7,9 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
 # Load .env from project root
@@ -16,7 +17,8 @@ load_dotenv(dotenv_path="../.env")
 
 from app.db import init_db, AsyncSessionLocal
 from app.models import SOSEvent, DispatchUnit, ServiceCache  # noqa: F401 — registers models
-from app.routes import sos, location, dispatch, services
+from app.routes import sos, location, dispatch, services, cache
+from app.request_id_middleware import RequestIdMiddleware
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -99,11 +101,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow frontend origin
+# Middlewares
+app.add_middleware(RequestIdMiddleware)
+
 cors_origin = os.getenv("CORS_ORIGIN", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[cors_origin, "http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -116,6 +121,7 @@ app.include_router(sos.router, prefix="/api/sos", tags=["SOS"])
 app.include_router(location.router, prefix="/api/location", tags=["Location"])
 app.include_router(dispatch.router, prefix="/api/dispatch", tags=["Dispatch"])
 app.include_router(services.router, prefix="/api/services", tags=["Services"])
+app.include_router(cache.router, prefix="/api/cache", tags=["Cache"])
 
 
 # ---------------------------------------------------------------------------
@@ -130,3 +136,19 @@ async def ping():
 @app.get("/")
 async def root():
     return {"success": True, "message": "Emergency SOS & ROADSoS API v1.0"}
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error("Unhandled error: %s", exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {"code": "INTERNAL_ERROR", "message": "An unexpected error occurred"},
+        },
+    )

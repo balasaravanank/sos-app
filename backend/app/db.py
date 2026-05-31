@@ -6,15 +6,21 @@ Fallback: Local SQLite (aiosqlite) for offline development.
 
 import os
 import logging
+from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# Determine connection string
-if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+# Determine connection string — handle all common URL prefixes
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    _url = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+    logger.info("Database: Supabase PostgreSQL")
+elif DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
     _url = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
     logger.info("Database: Supabase PostgreSQL")
 else:
@@ -49,3 +55,10 @@ async def get_db():
             yield session
         finally:
             await session.close()
+
+
+async def reset_engine():
+    """Dispose engine and clear state. Used for testing."""
+    global engine, AsyncSessionLocal
+    await engine.dispose()
+    logger.info("Database engine disposed")

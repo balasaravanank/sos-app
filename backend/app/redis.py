@@ -1,63 +1,151 @@
-"""Upstash Redis HTTP client — lightweight wrapper using httpx.
+"""Upstash Redis client — class-based wrapper using httpx.
 
-Upstash uses a REST API, not the standard Redis TCP protocol.
-All calls are fire-and-forget safe — if Redis is down, we log and return None.
+Supports Upstash REST API (HTTP) and falls back to an in-memory MockRedis
+when credentials are not configured. All calls are failure-safe — if Redis
+is down we log and degrade gracefully.
 """
 
 import os
+import json
 import logging
 import httpx
+from typing import Any
+from dotenv import load_dotenv
+
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
 UPSTASH_URL = os.getenv("UPSTASH_REDIS_REST_URL", "")
 UPSTASH_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN", "")
 
-_headers = {"Authorization": f"Bearer {UPSTASH_TOKEN}"} if UPSTASH_TOKEN else {}
+
+# ---------------------------------------------------------------------------
+# In-memory fallback
+# ---------------------------------------------------------------------------
+
+class MockRedis:
+    """In-memory Redis stand-in for local dev / offline mode."""
+
+    def __init__(self):
+        self.store: dict[str, Any] = {}
+        logger.warning("Using in-memory MockRedis fallback.")
+
+    async def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+        self.store[key] = value
+        return True
+
+    async def delete(self, key: str) -> bool:
+        self.store.pop(key, None)
+        return True
+
+    async def incr(self, key: str) -> int:
+        if key not in self.store:
+            self.store[key] = "0"
+        self.store[key] = str(int(self.store[key]) + 1)
+        return int(self.store[key])
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        return True  # Mock doesn't implement TTL
 
 
-async def _request(command: list[str]) -> dict | None:
-    """Send a Redis command via Upstash REST API."""
-    if not UPSTASH_URL or not UPSTASH_TOKEN:
-        logger.warning("Redis not configured — skipping command: %s", command[0])
-        return None
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                UPSTASH_URL,
-                headers=_headers,
-                json=command,
-                timeout=3.0,
-            )
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as exc:
-        logger.warning("Redis call failed (%s): %s", command[0], exc)
-        return None
+# ---------------------------------------------------------------------------
+# Upstash HTTP client
+# ---------------------------------------------------------------------------
+
+class UpstashRedis:
+    """Upstash Redis REST API client."""
+
+    def __init__(self, url: str, token: str):
+        self.url = url.rstrip("/")
+        self.headers = {"Authorization": f"Bearer {token}"}
+
+    async def _execute(self, command: str, *args) -> Any:
+        try:
+            async with httpx.AsyncClient() as client:
+                body = [command] + [str(a) for a in args]
+                response = await client.post(
+                    self.url, headers=self.headers, json=body, timeout=5.0
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if "error" in data:
+                        logger.error("Upstash Redis Error: %s", data["error"])
+                        return None
+                    return data.get("result")
+                else:
+                    logger.error("Upstash Redis HTTP Error: %s", response.status_code)
+                    return None
+        except Exception as e:
+            logger.warning("Redis operation failed: %s", e)
+            return None
+
+    async def get(self, key: str) -> str | None:
+        return await self._execute("GET", key)
+
+    async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+        if ex is not None:
+            result = await self._execute("SET", key, value, "EX", ex)
+        else:
+            result = await self._execute("SET", key, value)
+        return result is not None
+
+    async def delete(self, key: str) -> bool:
+        result = await self._execute("DEL", key)
+        return result is not None
+
+    async def incr(self, key: str) -> int:
+        result = await self._execute("INCR", key)
+        return int(result) if result is not None else 0
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        result = await self._execute("EXPIRE", key, seconds)
+        return result is not None
 
 
-async def redis_get(key: str) -> str | None:
-    """GET a key. Returns the value string or None."""
-    result = await _request(["GET", key])
-    return result.get("result") if result else None
+# ---------------------------------------------------------------------------
+# Singleton accessor
+# ---------------------------------------------------------------------------
+
+_redis_client = None
 
 
-async def redis_set(key: str, value: str, ex: int | None = None) -> bool:
-    """SET a key with optional TTL in seconds."""
-    cmd = ["SET", key, value]
-    if ex:
-        cmd.extend(["EX", str(ex)])
-    result = await _request(cmd)
-    return result is not None
+def get_redis() -> MockRedis | UpstashRedis:
+    """Get or create the Redis client singleton."""
+    global _redis_client
+    if _redis_client is None:
+        if UPSTASH_URL and UPSTASH_TOKEN:
+            _redis_client = UpstashRedis(UPSTASH_URL, UPSTASH_TOKEN)
+            logger.info("Redis: Upstash HTTP client configured")
+        else:
+            _redis_client = MockRedis()
+    return _redis_client
 
 
-async def redis_incr(key: str) -> int | None:
-    """INCR a key. Returns the new integer value or None."""
-    result = await _request(["INCR", key])
-    return int(result["result"]) if result and result.get("result") is not None else None
+# ---------------------------------------------------------------------------
+# Convenience helpers (used by roadsos-services / nearby_lookup)
+# ---------------------------------------------------------------------------
+
+# In-memory fallback cache for sync-style cache_get / cache_set
+_memory_cache: dict[str, tuple[str, float]] = {}
 
 
-async def redis_expire(key: str, seconds: int) -> bool:
-    """Set TTL on an existing key."""
-    result = await _request(["EXPIRE", key, str(seconds)])
-    return result is not None
+def cache_get(key: str) -> dict | None:
+    """Sync-friendly cache get (in-memory with TTL). Used by services layer."""
+    import time
+    if key in _memory_cache:
+        val_str, expires_at = _memory_cache[key]
+        if time.time() < expires_at:
+            return json.loads(val_str)
+        else:
+            del _memory_cache[key]
+    return None
+
+
+def cache_set(key: str, value: dict | list, ttl_seconds: int = 21600) -> None:
+    """Sync-friendly cache set (in-memory with TTL). Default 6 hours."""
+    import time
+    _memory_cache[key] = (json.dumps(value), time.time() + ttl_seconds)

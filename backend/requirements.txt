@@ -6,3 +6,6 @@ pydantic
 asyncpg
 httpx
 aiosqlite
+geoalchemy2
+redis
+pytest
