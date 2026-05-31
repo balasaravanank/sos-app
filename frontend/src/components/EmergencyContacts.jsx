@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getEmergencyContacts } from '../api/client';
+import { WifiOff } from 'lucide-react';
 
 const FALLBACK_CONTACTS = [
   { name: '108 Ambulance', phone: '108' },
@@ -53,7 +54,7 @@ export default function EmergencyContacts() {
       {isOffline && (
         <div className="card anim-slide-up" style={{ borderColor: 'var(--accent-amber)', padding: 12 }}>
           <div className="row gap-sm">
-            <span>⚡</span>
+            <span><WifiOff size={16} /></span>
             <span className="text-sm text-amber">Offline — showing cached contacts</span>
           </div>
         </div>

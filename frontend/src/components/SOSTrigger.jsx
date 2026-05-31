@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { triggerSOS } from '../api/client';
 import { useToast } from './Toast';
 
+import { AlertTriangle, Plus, Shield, Loader2 } from 'lucide-react';
+
 const MODES = [
-  { key: 'emergency', label: 'Emergency', icon: '🚨', cls: 'emergency' },
-  { key: 'injury', label: 'Injury', icon: '🩹', cls: 'injury' },
-  { key: 'safety', label: 'Safety', icon: '🛡️', cls: 'safety' },
+  { key: 'emergency', label: 'Emergency', icon: <AlertTriangle size={20} />, cls: 'emergency' },
+  { key: 'injury', label: 'Injury', icon: <Plus size={20} />, cls: 'injury' },
+  { key: 'safety', label: 'Safety', icon: <Shield size={20} />, cls: 'safety' },
 ];
 
 export default function SOSTrigger() {
@@ -63,7 +65,7 @@ export default function SOSTrigger() {
         >
           {loading ? (
             <>
-              <span style={{ fontSize: '1.5rem' }}>⏳</span>
+              <span className="sos-loading-icon"><Loader2 size={32} /></span>
               <span className="sos-btn-label">LOCATING</span>
             </>
           ) : (
@@ -84,7 +86,7 @@ export default function SOSTrigger() {
             onClick={() => setMode(m.key)}
             id={`mode-${m.key}`}
           >
-            <span className="mode-icon">{m.icon}</span>
+            <span className="mode-icon" style={{ display: 'flex' }}>{m.icon}</span>
             {m.label}
           </button>
         ))}

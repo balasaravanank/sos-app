@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getNearbyServices } from '../api/client';
 import ServiceCard from './ServiceCard';
 import { useToast } from './Toast';
+import { AlertCircle, MapPin } from 'lucide-react';
 
 const TYPES = [
   { key: 'hospital', label: 'Hospital' },
@@ -77,13 +78,13 @@ export default function NearbyServices() {
         </div>
       ) : error ? (
         <div className="empty-state">
-          <div className="empty-icon">⚠️</div>
+          <div className="empty-icon" style={{ display: 'flex' }}><AlertCircle size={48} /></div>
           <p className="text-secondary">{error}</p>
           <button className="btn btn-outline btn-sm" onClick={() => fetchServices(activeType)}>Retry</button>
         </div>
       ) : services.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon">🏥</div>
+          <div className="empty-icon" style={{ display: 'flex' }}><MapPin size={48} /></div>
           <p className="text-secondary">No {activeType} services found nearby</p>
           <p className="text-sm text-muted">Try increasing the search radius or check another type.</p>
         </div>

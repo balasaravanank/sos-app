@@ -560,3 +560,13 @@ input, textarea, select { font: inherit; color: inherit; background: none; borde
   .page, .page-center { max-width: 520px; }
   .bottom-nav { max-width: 520px; left: 50%; transform: translateX(-50%); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }
+
+/* --- ICON ANIMATIONS --- */
+.sos-loading-icon {
+  display: flex;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

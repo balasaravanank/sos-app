@@ -1,3 +1,5 @@
+import { Navigation, Star } from 'lucide-react';
+
 export default function ServiceCard({ service, userLat, userLng }) {
   const phone = service.phone || service.contact;
   const hasPhone = phone && phone.length > 1;
@@ -12,9 +14,9 @@ export default function ServiceCard({ service, userLat, userLng }) {
         {service.address && <div className="service-address">{service.address}</div>}
         <div className="service-meta">
           {service.distance_km != null && (
-            <span>📍 {service.distance_km} km</span>
+            <span><Navigation size={14} /> {service.distance_km} km</span>
           )}
-          {service.rating && <span>★ {service.rating}</span>}
+          {service.rating && <span><Star size={14} /> {service.rating}</span>}
           {service.type && (
             <span style={{ textTransform: 'capitalize' }}>{service.type}</span>
           )}

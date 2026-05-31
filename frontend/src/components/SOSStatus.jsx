@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getSOSStatus, confirmSOS } from '../api/client';
 import { useToast } from './Toast';
 import StatusBadge from './StatusBadge';
+import { Radio, ExternalLink, Check } from 'lucide-react';
 
 export default function SOSStatus({ sosData }) {
   const [status, setStatus] = useState(sosData || null);
@@ -56,7 +57,7 @@ export default function SOSStatus({ sosData }) {
   if (!sosData) {
     return (
       <div className="empty-state anim-fade-in">
-        <div className="empty-icon">📡</div>
+        <div className="empty-icon" style={{ display: 'flex' }}><Radio size={48} /></div>
         <p className="text-secondary">No active SOS</p>
         <p className="text-sm text-muted">Trigger an SOS from the home screen to see status here.</p>
       </div>
@@ -178,13 +179,13 @@ export default function SOSStatus({ sosData }) {
       {/* Directions */}
       {directions && (
         <a href={directions} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-block" id="btn-directions">
-          ↗ OPEN DIRECTIONS
+          <ExternalLink size={18} /> OPEN DIRECTIONS
         </a>
       )}
 
       {/* Confirm (bystander) */}
       <button className="btn btn-outline btn-block" onClick={handleConfirm} disabled={confirming} id="btn-confirm">
-        {confirming ? 'CONFIRMING...' : '✓ CONFIRM THIS EMERGENCY'}
+        {confirming ? 'CONFIRMING...' : <><Check size={18} /> CONFIRM THIS EMERGENCY</>}
       </button>
 
       {/* Clear */}
